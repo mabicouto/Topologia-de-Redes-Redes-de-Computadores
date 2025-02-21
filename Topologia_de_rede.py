@@ -66,19 +66,23 @@ def mostrar_tabelas_roteamento(G):
 
 def menu_interativo(G):
     while True:
-        comando = input("\nDigite um comando (ping <IP>, tabelas, sair): ").strip().lower()
+        comando = input("\nDigite um comando (ping <IP>, tabelas, sair, traceroute): ").strip().lower()
         
         if comando.startswith("ping"):
             _, destino_ip = comando.split(maxsplit=1)
             ping_terminal(G, destino_ip)
         elif comando == "tabelas":
-            mostrar_tabelas_roteamento()
+            mostrar_tabelas_roteamento(G)
         elif comando == "sair":
             print("Encerrando o programa...")
             plt.close()  # Fecha a janela do gráfico
             break
+        elif comando.startswith("traceroute"):
+            _, destino_ip = comando.split(maxsplit=1)
+            traceroute(G, destino_ip, e1, e2, e3, e4)
         else:
             print("Comando inválido. Tente novamente.")
+
 
 def ping_terminal(G, destino_ip):
     origem = list(G.nodes())[0]  # Assume o primeiro nó como origem
@@ -121,10 +125,59 @@ def ping_terminal(G, destino_ip):
         print(f"Aproximar um número redondo de tempos em milissegundos:")
         print(f"    Mínimo = {min(tempos)}ms, Máximo = {max(tempos)}ms, Média = {sum(tempos)//len(tempos)}ms")
         
-def traceroute(host, max_hops=30, timeout=2):
-    print(f"\nMostrando a rota para {host}...")
-    # Simulação do traceroute baseada no grafo omitida para foco no ping
+def traceroute(G, destino_ip, e1, e2, e3, e4, max_hops=30):
+    try:
+        destino_ip_obj = ipaddress.IPv4Address(destino_ip)
+    except ValueError:
+        print(f"Erro: O IP {destino_ip} não é um endereço IPv4 válido.")
+        return
 
+    # Define a origem com base na sub-rede do destino
+    if destino_ip_obj in e1 or destino_ip_obj in e3:
+        origem = "RoteadorA1"  # Origem para sub-redes gerenciadas pelo RoteadorA1
+    elif destino_ip_obj in e2 or destino_ip_obj in e4:
+        origem = "RoteadorA2"  # Origem para sub-redes gerenciadas pelo RoteadorA2
+    else:
+        print(f"Erro: O IP {destino_ip} não pertence a nenhuma sub-rede conhecida.")
+        return
+
+    destino = None
+
+    # Busca o destino no grafo
+    for node, data in G.nodes(data=True):
+        if data.get('ip') == destino_ip:
+            destino = node
+            break
+
+    if not destino:
+        print(f"Erro: O IP {destino_ip} não foi encontrado na rede.")
+        return
+
+    print(f"\nRastreando rota para {destino_ip} a partir de {origem}...\n")
+
+    try:
+        # Verifica se há um caminho entre a origem e o destino
+        if not nx.has_path(G, source=origem, target=destino):
+            print("Erro: Não há caminho entre a origem e o destino. Verifique a conectividade.")
+            return
+
+        caminho = nx.shortest_path(G, source=origem, target=destino, weight='weight')
+        print("Caminho encontrado:", caminho)  # Mostra os nós pelo qual o pacote está passando
+        total_saltos = min(len(caminho), max_hops)
+
+        for i in range(total_saltos):
+            nodo_atual = caminho[i]
+            latencia = sum(G[u][v]['weight'] for u, v in zip(caminho[:i], caminho[1:i+1])) if i > 0 else 0
+            ttl = max_hops - i  # Simulando TTL decrescente
+            
+            print(f"{i+1}\t{G.nodes[nodo_atual].get('ip', 'Desconhecido')}\t{latencia}ms\tTTL={ttl}")
+            time.sleep(0.5)
+
+    except nx.NetworkXNoPath:
+        print("Erro: Não há caminho entre a origem e o destino. Verifique a conectividade.")
+
+    print("\nRastreamento concluído.")
+    
 def diagnostico_completo():
     print("\nIniciando diagnóstico de rede...")
     # Diagnóstico completo omitido para foco no ping
@@ -185,7 +238,7 @@ def plotar_rede():
 
 def menu_interativo(G):
     while True:
-        comando = input("\nDigite um comando (ping <IP>, tabelas, sair): ").strip().lower()
+        comando = input("\nDigite um comando (ping <IP>, tabelas, sair, traceroute): ").strip().lower()
         
         if comando.startswith("ping"):
             _, destino_ip = comando.split(maxsplit=1)
@@ -196,8 +249,12 @@ def menu_interativo(G):
             print("Encerrando o programa...")
             plt.close()  # Fecha a janela do gráfico
             break
+        elif comando.startswith("traceroute"):
+            _, destino_ip = comando.split(maxsplit=1)
+            traceroute(G, destino_ip, e1, e2, e3, e4)
         else:
             print("Comando inválido. Tente novamente.")
+
 
 if __name__ == "_main_":
     G = plotar_rede()
